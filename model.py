@@ -127,7 +127,7 @@ class VisionTransformerBlock(nn.Module):
         (Not in 100%.)
     """
 
-    def __init__(self, hidden_dim: int, num_heads: int, mlp_ratio: int = 4):
+    def __init__(self, hidden_dim: int, num_heads: int, mlp_hidden_mul: int = 4):
         """Init.
 
         Parameters
@@ -136,8 +136,8 @@ class VisionTransformerBlock(nn.Module):
              Dimensionality of the encoder layers and the pooler layer.
         num_heads : int
             Number of attention heads for each attention layer in the encoder.
-        mlp_ratio : int, optional
-            The inner layer of the classification MLP is multiplied by this value.
+        mlp_hidden_mul : int, optional
+            The inner layer number of the MLP is multiplied by this value.
             By default 4.
         """
         
@@ -159,9 +159,9 @@ class VisionTransformerBlock(nn.Module):
 
         # Multi Layer Perceptron for classification.
         self.mlp = nn.Sequential(
-            nn.Linear(hidden_dim, mlp_ratio * hidden_dim),
+            nn.Linear(hidden_dim, mlp_hidden_mul * hidden_dim),
             nn.GELU(),
-            nn.Linear(mlp_ratio * hidden_dim, hidden_dim),
+            nn.Linear(mlp_hidden_mul * hidden_dim, hidden_dim),
         )
 
 
@@ -278,7 +278,7 @@ class ViT(nn.Module):
     def forward(self, images: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
-        
+
         Parameters
         ----------
         images : torch.Tensor
