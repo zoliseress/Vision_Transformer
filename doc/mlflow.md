@@ -38,5 +38,14 @@ with mlflow.start_run(run_name=model_name):
     mlflow.log_metric("test_accuracy", correct / total * 100)
 
     # Log model.
-    mlflow.pytorch.log_model(model, model_name)
+    mlflow.pytorch.log_model(
+        pytorch_model=model,
+        name=model_name
+    )
+
+    mlflow.end_run()
 ```
+
+## 3. Example
+
+<img src="mlflow_charts.png" alt="isolated" width="1200"/>

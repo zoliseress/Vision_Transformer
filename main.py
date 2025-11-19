@@ -60,6 +60,7 @@ def run(use_mlflow: bool = False):
 
     print("\t=====\n\tSTART\n\t=====\n")
 
+    # Init MLflow experiment.
     if use_mlflow:
         experiment_name = "VIT_on_MNIST"
         try:
@@ -70,6 +71,11 @@ def run(use_mlflow: bool = False):
         except Exception as e:
             print(f"Error setting up MLflow experiment: {e}")
             return
+        
+        if mlflow.active_run() is not None:
+            print("Closing leftover active run:", mlflow.active_run().info.run_id)
+            mlflow.end_run()
+        mlflow.start_run()
 
     # hyper-parameters
     N_EPOCHS = 35
@@ -124,6 +130,8 @@ def run(use_mlflow: bool = False):
         optimizer, factor=0.1, patience=2, threshold_mode='abs', min_lr=0.0001
     )
     print(f"Base LR: {LR:.4f}")
+    if use_mlflow:
+        learning_rates = [(1, LR)]
 
     for epoch in trange(N_EPOCHS, desc="Training"):
 
@@ -142,6 +150,9 @@ def run(use_mlflow: bool = False):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+        if use_mlflow:
+            mlflow.log_metric("train_loss", train_loss, step=epoch + 1)
 
         # Validation block.
         model.eval()
@@ -164,12 +175,16 @@ def run(use_mlflow: bool = False):
         val_acc = (val_correct / val_total) * 100
         print(f"Epoch {epoch + 1}/{N_EPOCHS} train_loss: {train_loss:.4f} val_loss: {val_loss:.4f} val_acc: {val_acc:.2f}%")
 
+        if use_mlflow:
+            mlflow.log_metric("val_loss", val_loss, step=epoch + 1)
+
         scheduler.step(val_loss)
 
         current_lr = optimizer.param_groups[0]['lr']
         if LR != current_lr:
             print(f"Current LR: {current_lr:.4f}")
             LR = current_lr
+            learning_rates.append((epoch + 1, LR))
 
     # Test.
     with torch.no_grad():
@@ -197,21 +212,25 @@ def run(use_mlflow: bool = False):
 
     # 1. MLFlow logging (params and metrics).
     if use_mlflow:
-        with mlflow.start_run(run_name=model_name):
-            mlflow.log_param("num_of_patches", number_of_patches)
-            mlflow.log_param("num_of_heads", number_of_heads)
-            mlflow.log_param("num_of_epochs", N_EPOCHS)
-            mlflow.log_param("LR", LR)
-            mlflow.log_metric("train_loss", train_loss)
-            mlflow.log_metric("val_loss", val_loss)
-            mlflow.log_metric("test_accuracy", correct / total * 100)
+        mlflow.log_param("num_of_patches", number_of_patches)
+        mlflow.log_param("num_of_heads", number_of_heads)
+        mlflow.log_param("num_of_epochs", N_EPOCHS)
+        mlflow.log_param("LR", learning_rates)
+        mlflow.log_metric("test_accuracy", correct / total * 100)
 
-            # Log model.
-            mlflow.pytorch.log_model(
-                pytorch_model=model,
-                name=model_name,
-                # registered_model_name="some_nice_name?"
-            )
+        # Log model.
+        example_input = torch.randn(1, 1, 28, 28).cpu().numpy()
+        example_output = model(torch.from_numpy(example_input)).detach().cpu().numpy()
+        mlflow.pytorch.log_model(
+            pytorch_model=model,
+            name=model_name,
+            # registered_model_name="some_nice_name?"
+            # registered_model_name="kis teszt",
+            signature=example_output,
+            input_example=example_input
+        )
+
+        mlflow.end_run()
 
     # 2. Save model to disk.
     out_path = "output"
